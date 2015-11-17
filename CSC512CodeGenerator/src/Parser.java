@@ -124,6 +124,9 @@ public class Parser {
 	// Label counter.
 	private int labelCounter;
 	
+	// Flag to determine whether to wrap numerical factor in local variable.
+	private boolean wrapFactorInLocalVar;
+	
 	public Parser(String fileName) throws FileNotFoundException, IOException {
 		this.inputFile = fileName;
 		this.scanner = new Scanner(fileName);
@@ -133,6 +136,7 @@ public class Parser {
 		this.globals = new ArrayList<String>();
 		this.locals = new ArrayList<String>();
 		this.labelCounter = 0;
+		this.wrapFactorInLocalVar = false;
 		
 		this.loopStarts = new ArrayList<String>();
 		this.loopEnds = new ArrayList<String>();
@@ -1052,6 +1056,9 @@ public class Parser {
 		} else if (word.getTokenName().equals("(")) {
 			word = nextWord();
 			
+			// Turn the flag on so that all code generated are local variables.
+			wrapFactorInLocalVar = true;
+			
 			// Expression list generated code.
 			if (!expr_list(g)) {
 				return false;
@@ -1059,6 +1066,9 @@ public class Parser {
 			
 			// Get the function call parameter list equivalent.
 			String paramList = g.getEquivalent();
+			
+			// Turn the flag off, we are done.
+			wrapFactorInLocalVar = false;
 			
 			if (!word.getTokenName().equals(")")) {
 				return false;
@@ -1233,7 +1243,11 @@ public class Parser {
 			
 			// Add the expression code.
 			String retEquivalent = g.getEquivalent();
-			g.addCode(System.lineSeparator() + "return " + retEquivalent + ";");
+			
+			// Wrap the equivalent into another local variable.
+			String code = addSymbol(retEquivalent, false);
+			g.addCode(code);			
+			g.addCode(System.lineSeparator() + "return " + getLastLocalVariable() + ";");
 			
 			word = nextWord();			
 			return true;
@@ -1375,8 +1389,15 @@ public class Parser {
 			return factor_prime(id, g);
 		} else if (word.getTokenType() == Scanner.TokenType.NUMBER) {
 			
-			// This is a number, place it in the equivalent directly.
-			g.setEquivalent(word.getTokenName());
+			// Check if we have to wrap the number in a local variable.
+			if (wrapFactorInLocalVar) {
+				String code = addSymbol(word.getTokenName(), false);
+				g.addCode(code);
+				g.setEquivalent(getLastLocalVariable());
+			} else {
+				// This is a number, place it in the equivalent directly.
+				g.setEquivalent(word.getTokenName());
+			}
 			
 			word = nextWord();			
 			return true;
@@ -1387,8 +1408,15 @@ public class Parser {
 				return false;
 			}
 			
-			// This is a negative number, place it in the equivalent directly.
-			g.setEquivalent("-" + word.getTokenName());
+			// Check if we have to wrap the number in a local variable.
+			if (wrapFactorInLocalVar) {
+				String code = addSymbol("-" + word.getTokenName(), false);
+				g.addCode(code);
+				g.setEquivalent(getLastLocalVariable());
+			} else {
+				// This is a negative number, place it in the equivalent directly.
+				g.setEquivalent("-" + word.getTokenName());
+			}
 			
 			word = nextWord();
 			return true;
