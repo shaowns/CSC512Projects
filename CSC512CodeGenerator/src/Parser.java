@@ -17,11 +17,15 @@ import java.util.ArrayList;
  */
 public class Parser {
 	
-	private static class SymbolIndex {
+	/*
+	 * Class to hold the location of a particular symbol.
+	 * Gives us the index and which array to look into.
+	 */
+	private static class SymbolLocation {
 		private int index;
         private boolean isGlobal;
         
-        public SymbolIndex(int i, boolean b) {
+        public SymbolLocation(int i, boolean b) {
             this.index = i;
             this.isGlobal = b;
         }
@@ -34,7 +38,7 @@ public class Parser {
         	return isGlobal;
         }
         
-        public String getString() {
+        public String getSymbolString() {
         	if (index != -1) {
 	        	if (isGlobal) {
 	        		return "global[" + Integer.toString(index) + "]";
@@ -45,11 +49,17 @@ public class Parser {
         }
 	}
 	
-	public class GenCode {
+	/*
+	 * Class for generated code for the function body.
+	 * This contains a string builder which accumulates
+	 * the intermediate code and when applicable the
+	 * equivalent symbol for an expression.
+	 */
+	public class GeneratedCode {
 		private StringBuilder code;
 	    private String equivalent;
 	    
-	    public GenCode() {
+	    public GeneratedCode() {
 	    	this.code = new StringBuilder();
 	    	this.equivalent = "";
 	    }
@@ -80,7 +90,7 @@ public class Parser {
 	// Input file name.
 	private String inputFile;
 	
-	// Builder for the generated code.
+	// Builder for the generated code. We print this to the file.
 	private StringBuilder outputCode;
 	
 	// Container for global variables.
@@ -134,7 +144,7 @@ public class Parser {
 	}
 	
 	// Finds the given id or expression in locals.
-	private SymbolIndex findVarIndex(String code, boolean isArray) {
+	private SymbolLocation findVarIndex(String code, boolean isArray) {
 		if (isArray) {
 			// Find the first index position.
 			code += "[0]"; 
@@ -143,22 +153,23 @@ public class Parser {
 		// Check the locals.
 		for (int i = 0; i < locals.size(); i++) {
 			if (locals.get(i).equals(code)) {
-				return new SymbolIndex(i, false);
+				return new SymbolLocation(i, false);
 			}
 		}
 		
 		for (int i = 0; i < globals.size(); i++) {
 			if (globals.get(i).equals(code)) {
-				return new SymbolIndex(i, true);
+				return new SymbolLocation(i, true);
 			}
 		}
 		
 		// Add it to the locals then.
 		addSymbol(code, false);		
-		return new SymbolIndex(locals.size() - 1, false);
+		return new SymbolLocation(locals.size() - 1, false);
 	}
 	
 	// Adds the symbol (identifier or expression) to the local or global symbol list.
+	// Also gives the assignment code necessary for this.
 	private String addSymbol(String s, boolean isGlobal) {
 		String code = "";
 		if (isGlobal) {
@@ -172,7 +183,7 @@ public class Parser {
 		return code; 
 	}
 	
-	// Print local variable.
+	// Print local variable at specific position.
 	private String printLocalVariable(int i) {
 		return System.lineSeparator() + "local[" + Integer.toString(i) + "] = " + locals.get(i) + ";";
 	}
@@ -241,7 +252,7 @@ public class Parser {
 	public void success() {
 		// Writer for the generated output file.
 		PrintWriter outputWriter = null;		
-		// Create parser and start parsing.
+		
 		try {
 			// Output file writer. Note this will wipe out the file if exists, so every
 			// new scanner run will produce the output file again.
@@ -374,7 +385,7 @@ public class Parser {
 			}
 			
 			// Get the generated code for statements.
-			GenCode funcCode = new GenCode();
+			GeneratedCode funcCode = new GeneratedCode();
 			if (!statements(funcCode)) {
 				return false;
 			}
@@ -590,7 +601,7 @@ public class Parser {
 			word = nextWord();
 			
 			// Get the expression value.
-			GenCode eg = new GenCode();
+			GeneratedCode eg = new GeneratedCode();
 			if (!expression(eg)) {
 				return false;
 			}
@@ -671,7 +682,7 @@ public class Parser {
 	<statements> --> print left_parenthesis  STRING right_parenthesis semicolon <statements>
 	<statements> --> empty
 	*/
-	public boolean statements(GenCode g) {
+	public boolean statements(GeneratedCode g) {
 		if (word.getTokenType() == Scanner.TokenType.IDENTIFIER) {
 			// Get the identifier.
 			String id = word.getTokenName();
@@ -872,10 +883,10 @@ public class Parser {
 			}
 			
 			// Get the identifier location in locals.
-			SymbolIndex pos = findVarIndex(id, false);
+			SymbolLocation pos = findVarIndex(id, false);
 			
 			// Add the code for the read statement.
-			g.addCode(System.lineSeparator() + "read ( " + pos.getString() + " );");
+			g.addCode(System.lineSeparator() + "read ( " + pos.getSymbolString() + " );");
 			
 			word = nextWord();
 			
@@ -959,7 +970,7 @@ public class Parser {
 	<statement prime> --> left_bracket <expression> right_bracket equal_sign <expression> semicolon
 	<statement prime> --> left_parenthesis <expr list> right_parenthesis semicolon
 	*/
-	public boolean statement_prime(String id, GenCode g) {
+	public boolean statement_prime(String id, GeneratedCode g) {
 		if (word.getTokenName().equals("=")) {
 			word = nextWord();
 			
@@ -977,10 +988,10 @@ public class Parser {
 			
 			// Assigning an expression to the identifier.
 			// Get the identifiers location.
-			SymbolIndex pos = findVarIndex(id, false);
+			SymbolLocation pos = findVarIndex(id, false);
 			
 			// Add the code for the assignment.
-			g.addCode(System.lineSeparator() + pos.getString() + " = " + rhsEquivalent + ";");			
+			g.addCode(System.lineSeparator() + pos.getSymbolString() + " = " + rhsEquivalent + ";");			
 			
 			word = nextWord();			
 			return true;
@@ -1019,7 +1030,7 @@ public class Parser {
 			
 			// Assigning expression to an array offset.
 			// Find the base of the array.
-			SymbolIndex base = findVarIndex(id, true);
+			SymbolLocation base = findVarIndex(id, true);
 			
 			// Add base + expression equivalent to local variables.
 			String code = addSymbol(Integer.toString(base.getIndex()) + " + " + arrayOffset, false);
@@ -1074,7 +1085,7 @@ public class Parser {
 	<expr list> --> <expression> <ne expr list prime>
 	<expr list> --> empty
 	*/
-	public boolean expr_list(GenCode g) {
+	public boolean expr_list(GeneratedCode g) {
 		if (expression(g)) {
 			return ne_expr_list_prime(g);
 		} else if (word.getTokenName().equals(")")) {
@@ -1090,7 +1101,7 @@ public class Parser {
 	<ne expr list prime> --> comma <expression> <ne expr list prime>
 	<ne expr list prime> --> empty
 	*/
-	public boolean ne_expr_list_prime(GenCode g) {
+	public boolean ne_expr_list_prime(GeneratedCode g) {
 		if (word.getTokenName().equals(",")) {
 			word = nextWord();
 			
@@ -1118,7 +1129,7 @@ public class Parser {
 	/*
 	<condition expression> -->  <condition> <condition expression prime>
 	*/
-	public boolean condition_expression(GenCode g) {
+	public boolean condition_expression(GeneratedCode g) {
 		if (condition(g)) {
 			return condition_expression_prime(g);
 		} else {
@@ -1131,7 +1142,7 @@ public class Parser {
 	<condition expression prime> --> double_or_sign <condition> 
 	<condition expression prime> --> empty
 	*/
-	public boolean condition_expression_prime(GenCode g) {
+	public boolean condition_expression_prime(GeneratedCode g) {
 		if (word.getTokenName().equals("&&") || word.getTokenName().equals("||")) {
 			// Save the operator.
 			String op = word.getTokenName();
@@ -1164,7 +1175,7 @@ public class Parser {
 	/*
 	<condition> --> <expression> <condition prime>
 	*/
-	public boolean condition(GenCode g) {
+	public boolean condition(GeneratedCode g) {
 		if (expression(g)) {
 			return condition_prime(g);
 		} else {
@@ -1180,7 +1191,7 @@ public class Parser {
 	<condition prime> --> <  <expression>
 	<condition prime> --> <=  <expression>
 	*/
-	public boolean condition_prime(GenCode g) {
+	public boolean condition_prime(GeneratedCode g) {
 		if (word.getTokenName().equals("==") || word.getTokenName().equals("!=")
 				|| word.getTokenName().equals(">") || word.getTokenName().equals(">=")
 				|| word.getTokenName().equals("<") || word.getTokenName().equals("<=")) {
@@ -1213,7 +1224,7 @@ public class Parser {
 	<return statement prime> --> <expression> semicolon
 	<return statement prime> --> semicolon
 	*/
-	public boolean return_statement_prime(GenCode g) {
+	public boolean return_statement_prime(GeneratedCode g) {
 		if (expression(g)) {
 			if (!word.getTokenName().equals(";")) {
 				return false;
@@ -1239,7 +1250,7 @@ public class Parser {
 	/*
 	<expression> --> <term> <expression prime>
 	*/
-	public boolean expression(GenCode g) {
+	public boolean expression(GeneratedCode g) {
 		if (term(g)) {
 			return expression_prime(g);
 		} else {
@@ -1252,7 +1263,7 @@ public class Parser {
 	<expression prime> --> minus_sign <term> <expression prime>
 	<expression prime> --> empty
 	*/
-	public boolean expression_prime(GenCode g) {
+	public boolean expression_prime(GeneratedCode g) {
 		if (word.getTokenName().equals("+") || word.getTokenName().equals("-")) {
 			
 			// Save the operator.
@@ -1293,7 +1304,7 @@ public class Parser {
 	/*
 	<term> --> <factor> <term prime>
 	*/
-	public boolean term(GenCode g) {
+	public boolean term(GeneratedCode g) {
 		if (factor(g)) {
 			return term_prime(g);
 		} else {
@@ -1306,7 +1317,7 @@ public class Parser {
 	<term prime> --> forward_slash <factor> <term prime>
 	<term prime> --> empty
 	*/
-	public boolean term_prime(GenCode g) {
+	public boolean term_prime(GeneratedCode g) {
 		if (word.getTokenName().equals("*") || word.getTokenName().equals("/")) {
 			// Save the operator.
 			String op = word.getTokenName();
@@ -1350,7 +1361,7 @@ public class Parser {
 	<factor> --> minus_sign NUMBER
 	<factor> --> left_parenthesis <expression> right_parenthesis
 	*/
-	public boolean factor(GenCode g) {
+	public boolean factor(GeneratedCode g) {
 		if (word.getTokenType() == Scanner.TokenType.IDENTIFIER) {
 			// Array dereference, function call, or just identifier.
 
@@ -1404,7 +1415,7 @@ public class Parser {
 	<factor prime> --> left_parenthesis <expr list> right_parenthesis
 	<factor prime> --> empty
 	*/
-	public boolean factor_prime(String id, GenCode g) {
+	public boolean factor_prime(String id, GeneratedCode g) {
 		if (word.getTokenName().equals("[")) {
 			
 			// Array dereference. 
@@ -1423,7 +1434,7 @@ public class Parser {
 			word = nextWord();
 			
 			// Find the base of the array.
-			SymbolIndex base = findVarIndex(id, true);
+			SymbolLocation base = findVarIndex(id, true);
 			
 			// Add base + expression equivalent to local variables.
 			String code = addSymbol(Integer.toString(base.getIndex()) + " + " + exprEquivalent, false);
@@ -1477,8 +1488,8 @@ public class Parser {
 			//			double_and_sign, double_or_sign, right_parenthesis, ==, !=, >, >=, <, <=, comma, right_bracket}
 			
 			// Just an identifier, return the corresponding local variable.
-			SymbolIndex index = findVarIndex(id, false);
-			g.setEquivalent(index.getString());			
+			SymbolLocation index = findVarIndex(id, false);
+			g.setEquivalent(index.getSymbolString());			
 			return true;
 		} else {
 			return false;
