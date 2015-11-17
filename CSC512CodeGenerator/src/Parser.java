@@ -55,7 +55,7 @@ public class Parser {
 	 * the intermediate code and when applicable the
 	 * equivalent symbol for an expression.
 	 */
-	public class GeneratedCode {
+	public static class GeneratedCode {
 		private StringBuilder code;
 	    private String equivalent;
 	    
@@ -407,10 +407,8 @@ public class Parser {
 			outputCode.append(System.lineSeparator() + word.getTokenName() + System.lineSeparator() + System.lineSeparator());
 			word = nextWord();
 			
-			// Clear out the local variables if any were added, since this is a function declaration rather than definition.
-			for (int i = 0; i < locals.size(); i ++) {
-				System.out.println(Integer.toString(i) + " : " + locals.get(i));
-			}
+			// Clear out the local variables if any were added, 
+			// since we are going out of the scope.
 			locals.clear();
 			return true;
 		} else {
@@ -1091,6 +1089,9 @@ public class Parser {
 		} else if (word.getTokenName().equals(")")) {
 			// <expr list> --> empty
 			// First+: {empty, right_parenthesis}
+			
+			// Clear out the equivalent if any, since this was empty.
+			g.setEquivalent("");
 			return true;
 		} else {
 			return false;
