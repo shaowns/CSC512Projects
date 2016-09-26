@@ -290,6 +290,9 @@ public class Parser {
 				 */
 				Scanner.Token peek1 = peekNextToken();
 				Scanner.Token peek2 = peekNextToken();
+				if (peek1 == null || peek2 == null) {
+					return false;
+				}
 				if (peek1.getTokenType() == Scanner.TokenType.IDENTIFIER && peek2.getTokenName().equals("(")) {
 					return true;
 				}

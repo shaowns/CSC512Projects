@@ -121,6 +121,7 @@ public class Scanner {
     		char ch;
     		if (nextTokenChar != Character.MIN_VALUE) {
     			ch = nextTokenChar;
+    			this.nextTokenChar = Character.MIN_VALUE;
     		} else {
     			readValue = getNextCharValue();
     			if (readValue == -1) {
